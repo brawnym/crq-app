@@ -109,3 +109,24 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    color: black;
+    font-size: 12px;
+  }
+
+  .print-area {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  @page {
+    margin: 20mm;
+  }
+}
