@@ -4,6 +4,7 @@ import { useAuth } from '@shared/auth/useAuth';
 import { useUsers } from '@shared/users/useUsers';
 import { useCRQActions } from '@modules/change-management/hooks/useCRQ';
 import { CRQForm } from '@modules/change-management/components/CRQForm';
+import type { CRQFormData } from '@modules/change-management/components/CRQForm';
 import { appendAudit } from '@modules/change-management/services/auditService';
 import { listProjects } from '@modules/change-management/services/projectService';
 import type { Project } from '@shared/types';
@@ -19,7 +20,7 @@ export default function CRQCreatePage() {
 
   const approvers = users.filter((u) => u.role === 'approver' && u.is_active);
 
-  async function handleSubmit(data: Parameters<typeof createCRQ>[0]) {
+  async function handleSubmit(data: CRQFormData) {
     const crq = await createCRQ({ ...data, requester_id: profile!.id });
     await appendAudit({ crq_id: crq.id, actor_id: profile!.id, action: 'created', new_value: { title: crq.title, status: crq.status } });
     navigate(`/crqs/${crq.id}`);
@@ -32,7 +33,7 @@ export default function CRQCreatePage() {
         <CRQForm
           projects={projects}
           approvers={approvers}
-          onSubmit={handleSubmit as never}
+          onSubmit={handleSubmit}
           onCancel={() => navigate('/crqs')}
         />
       </div>

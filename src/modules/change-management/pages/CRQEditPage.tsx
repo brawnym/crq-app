@@ -4,6 +4,7 @@ import { useAuth } from '@shared/auth/useAuth';
 import { useUsers } from '@shared/users/useUsers';
 import { useCRQDetail, useCRQActions } from '@modules/change-management/hooks/useCRQ';
 import { CRQForm } from '@modules/change-management/components/CRQForm';
+import type { CRQFormData } from '@modules/change-management/components/CRQForm';
 import { appendAudit } from '@modules/change-management/services/auditService';
 import { resetApproversForResubmit } from '@modules/change-management/services/approvalService';
 import { listProjects } from '@modules/change-management/services/projectService';
@@ -28,9 +29,9 @@ export default function CRQEditPage() {
     return <div className="text-red-600">Only draft CRQs can be edited.</div>;
   }
 
-  async function handleSubmit(data: Record<string, unknown>) {
+  async function handleSubmit(data: CRQFormData) {
     const prev = { title: crq!.title, description: crq!.description, status: crq!.status };
-    await updateCRQ(id!, data as never);
+    await updateCRQ(id!, data);
     await resetApproversForResubmit(id!);
     await updateCRQStatus(id!, 'pending_approval');
     await appendAudit({
@@ -51,7 +52,7 @@ export default function CRQEditPage() {
           projects={projects}
           approvers={approvers}
           initialValues={crq}
-          onSubmit={handleSubmit as never}
+          onSubmit={handleSubmit}
           onCancel={() => navigate(`/crqs/${id}`)}
         />
       </div>
