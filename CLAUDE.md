@@ -14,7 +14,7 @@ Side exits: `rejected` (from pending_approval), `archived` (from draft/completed
 ## Commands
 
 ```bash
-npm run dev           # Dev server (usually http://localhost:5173)
+npm run dev           # Dev server (usually http://localhost:5173, also on LAN via host:true)
 npm test              # Run all tests once
 npm run test:watch    # Watch mode
 npx tsc --noEmit      # Type check only
@@ -30,7 +30,7 @@ npm test -- --run src/path/to/file.test.ts
 
 ## Tech Stack
 
-React 19, TypeScript 5, Vite 6 + `@tailwindcss/vite` (Tailwind v4), React Router v7, Lucide React, Supabase (PostgreSQL + Auth), Vitest + React Testing Library.
+React 19, TypeScript 5, Vite 6 + `@tailwindcss/vite` (Tailwind v4), React Router v7, Lucide React, Supabase (PostgreSQL + Auth + Storage), Vitest + React Testing Library.
 
 ---
 
@@ -39,7 +39,8 @@ React 19, TypeScript 5, Vite 6 + `@tailwindcss/vite` (Tailwind v4), React Router
 ```
 src/
   shared/
-    auth/       # AuthProvider, useAuth, ProtectedRoute, supabaseClient, LoginPage
+    auth/       # AuthProvider, useAuth, ProtectedRoute, supabaseClient, LoginPage,
+                # ProfilePage, profileService
     access/     # ROLES constants, RoleGuard, canCreateCRQ/canApprove/canManageUsers
     types/      # User, Project, UserRole
     ui/         # Button, Modal, StatusBadge, Navbar, Layout
@@ -50,7 +51,8 @@ src/
       services/   # crqService, approvalService, auditService, followUpService, projectService
       hooks/      # useCRQ (list/detail/actions), useApprovals, useAuditTrail
       components/ # CRQForm, ApproverActions, FollowUpForm, AuditTrail, CRQPrintView
-      pages/      # Dashboard, CRQListPage, CRQDetailPage, CRQCreatePage, CRQEditPage, ProjectManagementPage
+      pages/      # Dashboard, CRQListPage, CRQDetailPage, CRQCreatePage, CRQEditPage,
+                  # ProjectManagementPage
 supabase/
   migrations/   # Run numbered SQL files in order via Supabase SQL Editor
 ```
@@ -94,13 +96,19 @@ const mockRpc = vi.hoisted(() => vi.fn());
 vi.mock('@shared/auth/supabaseClient', () => ({ supabase: { from: mockFrom, rpc: mockRpc } }));
 ```
 
+When a service uses `supabase.auth.signUp(...)`, stub `auth`:
+```ts
+const mockSignUp = vi.hoisted(() => vi.fn().mockResolvedValue({ data: {}, error: null }));
+vi.mock('@shared/auth/supabaseClient', () => ({ supabase: { from: mockFrom, auth: { signUp: mockSignUp } } }));
+```
+
 Use `import type { Session, User }` (not value import) for Supabase SDK types — Vite errors on the value export.
 
 ---
 
 ## Supabase Query Patterns
 
-**Query chain order matters:** call `.order()` after all `.eq()` / `.neq()` / `.in()` filters, not before. Calling terminal operations early turns the query into a Promise and breaks further chaining.
+**Query chain order matters:** call `.order()` after all `.eq()` / `.neq()` / `.in()` filters, not before.
 
 **`CRQ_SELECT` in `crqService.ts`** must include `approver_id` in the `crq_approvers` subselect:
 ```ts
@@ -110,6 +118,12 @@ approvers:crq_approvers(
 )
 ```
 Omitting `approver_id` makes all `a.approver_id === userId` comparisons return `undefined === userId` at runtime — silently breaking dashboard filters and approver actions.
+
+**`due_date` is a `timestamptz` column** — always normalise empty strings to `null` before sending:
+```ts
+{ ...form, due_date: form.due_date || null }
+```
+Supabase rejects `""` with "invalid input syntax for type timestamp with time zone".
 
 **Cross-role queries that bypass RLS** must use `supabase.rpc()` with a `SECURITY DEFINER` function. Current RPC functions:
 
@@ -140,9 +154,9 @@ Omitting `approver_id` makes all `a.approver_id === userId` comparisons return `
 - **Create:** `CRQCreatePage` offers **Submit for Approval** (primary) which creates + immediately sets `pending_approval`, and **Save as Draft** (secondary).
 - **Edit:** Only allowed when status is `draft` and user is owner (requester or admin).
 - **Submit:** `CRQDetailPage` shows **Submit for Approval** button on drafts with ≥1 approver assigned.
-- **Approve:** All approvers must approve. `check_all_approved()` RPC (security-definer) verifies this. When all approved, status advances to `in_implementation`.
-- **Complete:** Requester or admin clicks **Mark Complete** when `in_implementation`.
-- **Reject / Send Back:** Any assigned approver. Reject → `rejected`. Send Back → back to `draft`, approvers reset to `pending`.
+- **Approve:** Requires a mandatory comment (modal). All approvers must approve. `check_all_approved()` RPC (security-definer) verifies this. When all approved, status advances to `in_implementation`.
+- **Reject / Send Back:** Any assigned approver. Both require a mandatory comment. Reject → `rejected`. Send Back → back to `draft`, approvers reset to `pending`.
+- **Complete:** Requester or admin clicks **Mark Complete** when `in_implementation`. Requires a mandatory completion note (stored in audit trail `note` field).
 
 ---
 
@@ -155,6 +169,29 @@ Omitting `approver_id` makes all `a.approver_id === userId` comparisons return `
 | `admin` | Everything — also acts as requester for own CRQs |
 
 `canCreateCRQ`, `canApprove`, `canManageUsers` helpers are in `src/shared/access/roles.ts`.
+
+---
+
+## User Management & Invites
+
+`inviteUser` in `userService.ts` uses `supabase.auth.signUp()` (not `admin.inviteUserByEmail` — that requires the service_role key which is unavailable browser-side). A random temporary password is generated and shown to the admin in a success modal.
+
+The `handle_new_user` trigger in `001_schema.sql` reads `full_name` and `role` from `raw_user_meta_data` on signup and creates the `public.users` row automatically.
+
+**Email confirmation:** Currently disabled in Supabase (Authentication → Providers → Email → "Confirm email" OFF) to avoid rate limits during development. For production: turn it back ON and swap the success modal notice in `UserManagementPage.tsx` (marked with `PRODUCTION` comment) and follow the comment in `userService.ts`.
+
+---
+
+## User Profile
+
+Route `/profile` (`src/shared/auth/ProfilePage.tsx`). Uses `profileService.ts` for:
+- `updateProfileName` — updates `public.users`
+- `updatePassword` — `supabase.auth.updateUser({ password })`
+- `uploadAvatar` / `saveAvatarUrl` — uploads to `avatars` storage bucket at path `{userId}/avatar.{ext}`, stores public URL with cache-busting timestamp
+
+`AuthProvider` exposes `refreshProfile()` — call this after any profile update so the navbar reflects changes immediately.
+
+Avatar storage bucket (`avatars`) is public. Write RLS restricts uploads to `{userId}/` prefix. Created in `008_user_avatar.sql`.
 
 ---
 
@@ -179,14 +216,15 @@ VITE_APP_URL=http://localhost:5173
 
 ## Database Migrations
 
-Migrations live in `supabase/migrations/` and must be run manually in the Supabase SQL Editor in numbered order. There is no CLI-based migration runner configured. Current migrations:
+Migrations live in `supabase/migrations/` and must be run manually in the Supabase SQL Editor in numbered order. There is no CLI-based migration runner configured.
 
 | File | Purpose |
 |------|---------|
-| `001_schema.sql` | Tables, enums, triggers |
+| `001_schema.sql` | Tables, enums, triggers (handle_new_user, set_crq_number, touch_crq_updated_at, set_initial_sla) |
 | `002_rls.sql` | Initial RLS policies |
 | `003_pg_cron.sql` | Scheduled jobs |
-| `004_fix_rls_recursion.sql` | Fix crqs↔crq_approvers infinite recursion |
+| `004_fix_rls_recursion.sql` | Fix crqs↔crq_approvers infinite recursion via security-definer helpers |
 | `005_approver_visibility.sql` | Allow all users to read active approvers via RLS |
 | `006_get_active_approvers_fn.sql` | `get_active_approvers()` security-definer RPC |
 | `007_approver_update_crq.sql` | Allow approvers to update assigned CRQs + `check_all_approved()` RPC |
+| `008_user_avatar.sql` | Add `avatar_url` to users + create `avatars` storage bucket with RLS |
