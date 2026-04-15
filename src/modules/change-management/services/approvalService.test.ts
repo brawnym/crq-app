@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { actionApproval, checkAllApproved } from './approvalService';
 
 const mockFrom = vi.hoisted(() => vi.fn());
-vi.mock('@shared/auth/supabaseClient', () => ({ supabase: { from: mockFrom } }));
+const mockRpc  = vi.hoisted(() => vi.fn());
+vi.mock('@shared/auth/supabaseClient', () => ({ supabase: { from: mockFrom, rpc: mockRpc } }));
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -20,28 +21,14 @@ describe('approvalService', () => {
   });
 
   it('checkAllApproved returns true when all approvers approved', async () => {
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
-        data: [
-          { status: 'approved' },
-          { status: 'approved' },
-        ],
-        error: null,
-      }),
-    });
+    mockRpc.mockResolvedValue({ data: true, error: null });
     const result = await checkAllApproved('crq-1');
     expect(result).toBe(true);
+    expect(mockRpc).toHaveBeenCalledWith('check_all_approved', { p_crq_id: 'crq-1' });
   });
 
   it('checkAllApproved returns false when any approver is pending', async () => {
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
-        data: [{ status: 'approved' }, { status: 'pending' }],
-        error: null,
-      }),
-    });
+    mockRpc.mockResolvedValue({ data: false, error: null });
     const result = await checkAllApproved('crq-1');
     expect(result).toBe(false);
   });

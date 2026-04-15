@@ -6,12 +6,27 @@ const CRQ_SELECT = `
   project:projects(id, name),
   requester:users!requester_id(id, full_name, email),
   approvers:crq_approvers(
-    id, status, comments, actioned_at,
+    id, approver_id, status, comments, actioned_at,
     approver:users!approver_id(id, full_name, email)
   )
 `;
 
 export async function listCRQs(filters: CRQFilters): Promise<CRQ[]> {
+  // approver_id is not a column on crqs — resolve via crq_approvers first
+  if (filters.approver_id) {
+    const { data: rows, error: apvErr } = await supabase
+      .from('crq_approvers')
+      .select('crq_id')
+      .eq('approver_id', filters.approver_id);
+    if (apvErr) throw apvErr;
+    const ids = (rows ?? []).map((r) => r.crq_id as string);
+    if (ids.length === 0) return [];
+    // Re-call without approver_id but scoped to those IDs
+    const rest = { ...filters, approver_id: undefined };
+    const crqs = await listCRQs(rest);
+    return crqs.filter((c) => ids.includes(c.id));
+  }
+
   let query = supabase.from('crqs').select(CRQ_SELECT);
 
   if (!filters.include_archived) query = query.neq('status', 'archived');

@@ -20,9 +20,10 @@ export function useUsers() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function invite(email: string, fullName: string, role: UserRole) {
-    await inviteUser(email, fullName, role);
+  async function invite(email: string, fullName: string, role: UserRole): Promise<{ tempPassword: string }> {
+    const result = await inviteUser(email, fullName, role);
     await load();
+    return result;
   }
 
   async function changeRole(userId: string, role: UserRole) {

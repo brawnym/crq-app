@@ -2,16 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { listUsers, inviteUser } from './userService';
 
 const mockFrom = vi.hoisted(() => vi.fn());
-const mockInviteUserByEmail = vi.hoisted(() => vi.fn().mockResolvedValue({ data: {}, error: null }));
+const mockSignUp = vi.hoisted(() => vi.fn().mockResolvedValue({ data: {}, error: null }));
 
 vi.mock('@shared/auth/supabaseClient', () => ({
   supabase: {
     from: mockFrom,
-    auth: {
-      admin: {
-        inviteUserByEmail: mockInviteUserByEmail,
-      },
-    },
+    auth: { signUp: mockSignUp },
   },
 }));
 
@@ -31,11 +27,16 @@ describe('userService', () => {
     expect(users[0].full_name).toBe('Alice');
   });
 
-  it('inviteUser calls supabase admin invite', async () => {
-    await inviteUser('bob@example.com', 'Bob Smith', 'approver');
-    expect(mockInviteUserByEmail).toHaveBeenCalledWith(
-      'bob@example.com',
-      expect.objectContaining({ data: { full_name: 'Bob Smith', role: 'approver' } })
+  it('inviteUser calls signUp with email, temp password, and metadata', async () => {
+    const result = await inviteUser('bob@example.com', 'Bob Smith', 'approver');
+    expect(mockSignUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'bob@example.com',
+        options: expect.objectContaining({
+          data: { full_name: 'Bob Smith', role: 'approver' },
+        }),
+      })
     );
+    expect(result.tempPassword).toBeTruthy();
   });
 });
