@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { Pencil, Archive, Printer } from 'lucide-react';
+import { Pencil, Archive, Printer, Send } from 'lucide-react';
 import { useCRQDetail, useCRQActions } from '@modules/change-management/hooks/useCRQ';
 import { useAuditTrail } from '@modules/change-management/hooks/useAuditTrail';
 import { StatusBadge } from '@shared/ui/StatusBadge';
 import { Button } from '@shared/ui/Button';
+import { Modal } from '@shared/ui/Modal';
 import { RoleGuard } from '@shared/access/RoleGuard';
 import { ApproverActions } from '@modules/change-management/components/ApproverActions';
 import { FollowUpForm } from '@modules/change-management/components/FollowUpForm';
@@ -21,19 +22,42 @@ export default function CRQDetailPage() {
   const { updateCRQStatus, archiveCRQ } = useCRQActions();
   const navigate = useNavigate();
   const [printMode, setPrintMode] = useState(false);
+  const [completeModal, setCompleteModal] = useState(false);
+  const [completeComment, setCompleteComment] = useState('');
+  const [completeLoading, setCompleteLoading] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
 
   if (loading) return <div className="p-8 text-center text-gray-400">Loading…</div>;
   if (!crq) return <div className="p-8 text-center text-red-500">CRQ not found.</div>;
 
-  const canEdit = crq.status === 'draft' && crq.requester_id === profile?.id;
-  const canComplete = crq.status === 'in_implementation' && crq.requester_id === profile?.id;
+  const isOwner = crq.requester_id === profile?.id || profile?.role === 'admin';
+  const canEdit = crq.status === 'draft' && isOwner;
+  const canSubmit = crq.status === 'draft' && isOwner && (crq.approvers?.length ?? 0) > 0;
+  const canComplete = crq.status === 'in_implementation' && isOwner;
   const canArchive = ['completed', 'rejected', 'draft'].includes(crq.status);
   const showPDF = ['in_implementation', 'completed', 'archived'].includes(crq.status);
 
-  async function handleComplete() {
-    await updateCRQStatus(id!, 'completed');
-    await appendAudit({ crq_id: id!, actor_id: profile!.id, action: 'completed' });
+  async function handleSubmit() {
+    await updateCRQStatus(id!, 'pending_approval');
+    await appendAudit({ crq_id: id!, actor_id: profile!.id, action: 'submitted', new_value: { status: 'pending_approval' } });
     reload();
+  }
+
+  async function handleComplete() {
+    if (!completeComment.trim()) return;
+    setCompleteLoading(true);
+    setCompleteError(null);
+    try {
+      await updateCRQStatus(id!, 'completed');
+      await appendAudit({ crq_id: id!, actor_id: profile!.id, action: 'completed', note: completeComment.trim() });
+      setCompleteModal(false);
+      setCompleteComment('');
+      reload();
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : 'Failed to complete CRQ. Please try again.');
+    } finally {
+      setCompleteLoading(false);
+    }
   }
 
   async function handleArchive() {
@@ -46,6 +70,33 @@ export default function CRQDetailPage() {
     return <CRQPrintView crq={crq} auditEntries={entries} onClose={() => setPrintMode(false)} />;
   }
 
+  const completeModalEl = completeModal && (
+    <Modal title="Mark CRQ Complete" onClose={() => { setCompleteModal(false); setCompleteComment(''); setCompleteError(null); }}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">Please add completion notes before closing this CRQ.</p>
+        <textarea
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          rows={4}
+          placeholder="Completion notes (required)…"
+          value={completeComment}
+          onChange={(e) => setCompleteComment(e.target.value)}
+          autoFocus
+        />
+        {completeError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{completeError}</p>
+        )}
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => { setCompleteModal(false); setCompleteComment(''); setCompleteError(null); }}>
+            Cancel
+          </Button>
+          <Button onClick={handleComplete} disabled={!completeComment.trim() || completeLoading}>
+            {completeLoading ? 'Completing…' : 'Mark Complete'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
   const dl = (label: string, value: string | undefined | null) => (
     <div>
       <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</dt>
@@ -55,6 +106,7 @@ export default function CRQDetailPage() {
 
   return (
     <div className="space-y-6">
+      {completeModalEl}
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -74,8 +126,13 @@ export default function CRQDetailPage() {
               <Button variant="secondary" size="sm"><Pencil size={13} /> Edit</Button>
             </Link>
           )}
+          {canSubmit && (
+            <Button size="sm" onClick={handleSubmit}>
+              <Send size={13} /> Submit for Approval
+            </Button>
+          )}
           {canComplete && (
-            <Button size="sm" onClick={handleComplete}>Mark Complete</Button>
+            <Button size="sm" onClick={() => setCompleteModal(true)}>Mark Complete</Button>
           )}
           {canArchive && (
             <RoleGuard allow={['requester', 'admin']}>

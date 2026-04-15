@@ -7,14 +7,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<string, string> = {
-  primary:   'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300',
-  secondary: 'bg-gray-100 text-gray-800 hover:bg-gray-200 disabled:opacity-50',
-  danger:    'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-  ghost:     'bg-transparent text-blue-600 hover:bg-blue-50 disabled:opacity-50',
+  primary:   'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-blue-300 shadow-sm',
+  secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 shadow-sm',
+  danger:    'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 shadow-sm',
+  ghost:     'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50',
 };
 
 const sizeStyles: Record<string, string> = {
-  sm: 'px-3 py-1 text-sm',
+  sm: 'px-3 py-1.5 text-xs',
   md: 'px-4 py-2 text-sm',
 };
 
@@ -27,7 +27,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-md font-medium transition-colors
+      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors
         ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     >

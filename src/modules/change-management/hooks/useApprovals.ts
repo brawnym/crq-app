@@ -6,9 +6,9 @@ import { appendAudit } from '../services/auditService';
 export function useApprovals(crqId: string, onUpdate: () => void) {
   const { profile } = useAuth();
 
-  async function approve(approverRowId: string) {
-    await actionApproval(approverRowId, 'approved', null);
-    await appendAudit({ crq_id: crqId, actor_id: profile!.id, action: 'approved' });
+  async function approve(approverRowId: string, comments: string) {
+    await actionApproval(approverRowId, 'approved', comments);
+    await appendAudit({ crq_id: crqId, actor_id: profile!.id, action: 'approved', note: comments });
     const allDone = await checkAllApproved(crqId);
     if (allDone) {
       await updateCRQStatus(crqId, 'in_implementation');

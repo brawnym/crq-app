@@ -9,6 +9,7 @@ import CRQDetailPage from '@modules/change-management/pages/CRQDetailPage';
 import CRQEditPage from '@modules/change-management/pages/CRQEditPage';
 import UserManagementPage from '@shared/users/UserManagementPage';
 import ProjectManagementPage from '@modules/change-management/pages/ProjectManagementPage';
+import ProfilePage from '@shared/auth/ProfilePage';
 
 function AppShell() {
   return (
@@ -21,6 +22,7 @@ function AppShell() {
         <Route path="/crqs/:id/edit" element={<CRQEditPage />} />
         <Route path="/admin/users" element={<UserManagementPage />} />
         <Route path="/admin/projects" element={<ProjectManagementPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

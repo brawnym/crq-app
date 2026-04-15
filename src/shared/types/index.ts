@@ -7,6 +7,7 @@ export interface User {
   role: UserRole;
   is_active: boolean;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 export interface Project {

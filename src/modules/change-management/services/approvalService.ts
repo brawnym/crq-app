@@ -14,12 +14,9 @@ export async function actionApproval(
 }
 
 export async function checkAllApproved(crqId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('crq_approvers')
-    .select('status')
-    .eq('crq_id', crqId);
+  const { data, error } = await supabase.rpc('check_all_approved', { p_crq_id: crqId });
   if (error) throw error;
-  return (data ?? []).every((row) => row.status === 'approved');
+  return data === true;
 }
 
 export async function resetApproversForResubmit(crqId: string): Promise<void> {

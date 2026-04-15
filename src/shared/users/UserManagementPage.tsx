@@ -12,16 +12,27 @@ export default function UserManagementPage() {
   const [inviteFullName, setInviteFullName] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('requester');
   const [submitting, setSubmitting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [createdUser, setCreatedUser] = useState<{ email: string; tempPassword: string } | null>(null);
+
+  function closeInviteModal() {
+    setShowInviteModal(false);
+    setInviteEmail('');
+    setInviteFullName('');
+    setInviteRole('requester');
+    setInviteError(null);
+  }
 
   async function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setInviteError(null);
     try {
-      await invite(inviteEmail, inviteFullName, inviteRole);
-      setShowInviteModal(false);
-      setInviteEmail('');
-      setInviteFullName('');
-      setInviteRole('requester');
+      const { tempPassword } = await invite(inviteEmail, inviteFullName, inviteRole);
+      setCreatedUser({ email: inviteEmail, tempPassword });
+      closeInviteModal();
+    } catch (err) {
+      setInviteError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -136,15 +147,51 @@ export default function UserManagementPage() {
                 <option value="admin">admin</option>
               </select>
             </div>
+            {inviteError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{inviteError}</p>
+            )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setShowInviteModal(false)}>
+              <Button type="button" variant="secondary" onClick={closeInviteModal}>
                 Cancel
               </Button>
               <Button type="submit" variant="primary" disabled={submitting}>
-                Send Invite
+                {submitting ? 'Creating…' : 'Send Invite'}
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {createdUser && (
+        <Modal title="User Created" onClose={() => setCreatedUser(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">
+              The account for <strong>{createdUser.email}</strong> has been created.
+              Share the following temporary credentials with the user — they should change their password after first login.
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Email</span>
+                <span className="font-mono font-medium text-gray-900">{createdUser.email}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Temporary Password</span>
+                <span className="font-mono font-medium text-gray-900 select-all">{createdUser.tempPassword}</span>
+              </div>
+            </div>
+            {/* PRODUCTION: uncomment the block below when email confirmation is re-enabled in Supabase
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              The user will receive a confirmation email. They must click the confirmation link before
+              they can log in with the temporary password.
+            </p>
+            */}
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              The user can log in immediately with these credentials. Ask them to update their password via their Profile page after first login.
+            </p>
+            <div className="flex justify-end">
+              <Button onClick={() => setCreatedUser(null)}>Done</Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

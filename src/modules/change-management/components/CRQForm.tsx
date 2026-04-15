@@ -3,7 +3,7 @@ import type { CRQ, CRQPriority } from '@modules/change-management/types';
 import type { User, Project } from '@shared/types';
 import { Button } from '@shared/ui/Button';
 
-interface CRQFormData {
+export interface CRQFormData {
   title: string;
   description: string;
   priority: CRQPriority;
@@ -12,7 +12,7 @@ interface CRQFormData {
   requested_date: string;
   authorized_by: string;
   changes_effective_from: string;
-  due_date: string;
+  due_date: string | null;
   approver_ids: string[];
 }
 
@@ -21,10 +21,12 @@ interface CRQFormProps {
   approvers: User[];
   initialValues?: Partial<CRQ>;
   onSubmit: (data: CRQFormData) => Promise<void>;
+  onSaveAsDraft?: (data: CRQFormData) => Promise<void>;
   onCancel: () => void;
+  submitLabel?: string;
 }
 
-export function CRQForm({ projects, approvers, initialValues, onSubmit, onCancel }: CRQFormProps) {
+export function CRQForm({ projects, approvers, initialValues, onSubmit, onSaveAsDraft, onCancel, submitLabel = 'Save' }: CRQFormProps) {
   const [form, setForm] = useState<CRQFormData>({
     title:                  initialValues?.title ?? '',
     description:            initialValues?.description ?? '',
@@ -38,6 +40,7 @@ export function CRQForm({ projects, approvers, initialValues, onSubmit, onCancel
     approver_ids:           initialValues?.approvers?.map((a) => a.approver_id) ?? [],
   });
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function set<K extends keyof CRQFormData>(key: K, value: CRQFormData[K]) {
@@ -62,11 +65,23 @@ export function CRQForm({ projects, approvers, initialValues, onSubmit, onCancel
     setError(null);
     setSubmitting(true);
     try {
-      await onSubmit(form);
+      await onSubmit({ ...form, due_date: form.due_date || null });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSaveAsDraft() {
+    setError(null);
+    setSavingDraft(true);
+    try {
+      await onSaveAsDraft!({ ...form, due_date: form.due_date || null });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -156,9 +171,14 @@ export function CRQForm({ projects, approvers, initialValues, onSubmit, onCancel
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-3 justify-end">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? 'Saving…' : 'Save'}
+        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        {onSaveAsDraft && (
+          <Button type="button" variant="secondary" onClick={handleSaveAsDraft} disabled={savingDraft || submitting}>
+            {savingDraft ? 'Saving…' : 'Save as Draft'}
+          </Button>
+        )}
+        <Button type="submit" disabled={submitting || savingDraft}>
+          {submitting ? 'Submitting…' : submitLabel}
         </Button>
       </div>
     </form>

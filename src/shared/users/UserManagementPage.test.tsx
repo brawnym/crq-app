@@ -41,7 +41,7 @@ const makeHook = (overrides: Partial<{
   users: [],
   loading: false,
   error: null,
-  invite: vi.fn().mockResolvedValue(undefined),
+  invite: vi.fn().mockResolvedValue({ tempPassword: 'Tmp1abc123' }),
   changeRole: vi.fn().mockResolvedValue(undefined),
   deactivate: vi.fn().mockResolvedValue(undefined),
   reactivate: vi.fn().mockResolvedValue(undefined),
@@ -104,7 +104,7 @@ describe('UserManagementPage', () => {
   });
 
   it('submits invite form with correct data', async () => {
-    const invite = vi.fn().mockResolvedValue(undefined);
+    const invite = vi.fn().mockResolvedValue({ tempPassword: 'Tmp1abc123' });
     mockUseUsers.mockReturnValue(makeHook({ invite }));
     render(<UserManagementPage />);
 
